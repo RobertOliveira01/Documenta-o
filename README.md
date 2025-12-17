@@ -4,7 +4,7 @@ Este repositório contém o pipeline de automação (ETL) responsável pela inge
 
 ## ⚙️ Arquitetura do Sistema
 
-O sistema é composto por cinco scripts Python independentes. A arquitetura utiliza um modelo de **consistência eventual** para garantir que dados preenchidos durante o atendimento (como o e-mail informado tardiamente) sejam capturados corretamente.
+O sistema é composto por cinco scripts Python independentes. A arquitetura utiliza um modelo de **consistência eventual** para garantir que dados preenchidos durante o atendimento (como o e-mail cadastrado depois) sejam capturados corretamente.
 
 | Script | Função Principal | Frequência Sugerida |
 | :--- | :--- | :--- |
@@ -25,7 +25,7 @@ O sistema é composto por cinco scripts Python independentes. A arquitetura util
 * **Comportamento das informações do Cliente:**
     1.  Ao receber uma mensagem, o script verifica se o cliente já existe no banco.
     2.  Se não existir, ele consulta a API de Clientes e atualiza as informações.
-    3.  Se o cliente iniciou a conversa agora e ainda não informou o e-mail ao atendente, este script salvará as mensagens e (apenas nome/telefone), no script de rotina os dados do cliente serão consultados novamente para atualização.
+    3.  Se o cliente iniciou a conversa agora e ainda não cadastrou o e-mail, este script salvará as mensagens e apenas nome/telefone, no script de rotina os dados do cliente serão consultados novamente para atualização.
 
 ### 2. Atualizando informações do Cliente (A "Rede de Segurança")
 **Script:** `4_rotina_atualizar_cliente_banco.py`
