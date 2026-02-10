@@ -19,7 +19,7 @@ O sistema é dividido em 5 containers (workers) que operam de forma independente
 | :--- | :--- | :--- | :--- |
 | **Script 1** | `worker_1_ingestao` | **Input (Coleta)** | Baixa mensagens da OmniChat a cada 60s e salva no MongoDB. Garante que nenhuma conversa seja perdida. |
 | **Script 2** | `worker_2_hubspot_crm` | **CRM Core** | Lê o Banco. Se o cliente tiver e-mail, cria/atualiza **Contato** e **Empresa** no HubSpot e salva o histórico da conversa na **Nota**. *Não cria Negócios.* |
-| **Script 3** | `worker_3_hubspot_deals` | **Pedidos** | Lê Pedidos novos. Verifica se existe um **Negócio Manual** aberto no HubSpot. <br>🟢 **Se sim:** insere produtos e valores. <br>🔴 **Se não:** deixa o pedido como `PENDENTE` e tenta depois. |
+| **Script 3** | `worker_3_hubspot_deals` | **Pedidos** | Lê Pedidos novos. Verifica se existe um **Negócio Manual** aberto no HubSpot. <br>🟢 **Se sim:** insere produtos, frete e valores (sem mudar o nome). <br>🔴 **Se não:** deixa o pedido como `PENDENTE` até que um negócio seja criado. |
 | **Script 4** | `worker_4_rotina_clientes` | **Reparo** | Monitora a base da OmniChat. Se um cliente ganhar um e-mail novo, "destrava" as mensagens antigas para o Script 2 processar. |
 | **Script 5** | `worker_5_rotina_pedidos` | **Sincronia** | Monitora pedidos já concluídos. Se houver alteração de valor, produtos ou troca de negócio, atualiza os dados no HubSpot. |
 
@@ -29,7 +29,7 @@ O sistema é dividido em 5 containers (workers) que operam de forma independente
 
 ### 1. Ingestão e Identificação
 * O **Script 1** baixa os dados brutos.
-* O **Script 2** processa esses dados. Se o cliente **não tiver e-mail**, o script ignora (logs de aviso). Se tiver e-mail, ele garante que o Contato exista no HubSpot.
+* O **Script 2** processa esses dados. Se o cliente **não tiver e-mail**, o script ignora (logs de aviso). Se tiver e-mail, ele garante que o Contato e a Empresa existam no HubSpot.
 
 ### 2. O Fluxo do Pedido (Script 3)
 Quando um pedido entra, o script executa a seguinte lógica de decisão:
@@ -39,14 +39,13 @@ Quando um pedido entra, o script executa a seguinte lógica de decisão:
     * **Ação:** Nenhuma.
     * **Status:** O pedido permanece no MongoDB como `PENDENTE`.
     * **Log:** `[AGUARDANDO] Nenhum negócio aberto encontrado`.
-    * **Repescagem:** O script tentará novamente no próximo ciclo.
+    * **Repescagem:** O script tentará novamente no próximo ciclo, aguardando a ação do vendedor.
 3.  **Cenário B: Negócio Encontrado** ✅
-    * **Ação:** O script assume esse negócio.
+    * **Ação:** O script assume esse negócio existente.
     * **Atualização:**
-        * Renomeia o Deal para: `Nome Cliente #ID_Pedido`.
-        * Limpa itens antigos (se houver).
-        * Cria os novos **Line Items** (produtos) com quantidade e preço.
-        * Atualiza o valor total do Deal.
+        * 🔒 **Nome do Negócio:** O script **NÃO** altera o nome. Mantém o original criado pelo vendedor.
+        * **Itens:** Limpa itens antigos (se houver) e cria os novos **Line Items** (produtos).
+        * **Financeiro:** Atualiza o valor total do Deal e o campo de Frete.
     * **Status:** Marca o pedido como `CONCLUIDO` no MongoDB.
 
 ---
@@ -58,14 +57,15 @@ Quando um pedido entra, o script executa a seguinte lógica de decisão:
 * **Dados:** Nome, Telefone, Link do WhatsApp.
 
 ### Negócio (Deal)
-A automação agora apenas **LÊ** e **ATUALIZA** negócios existentes.
+A automação agora apenas **LÊ** e **ATUALIZA VALORES** em negócios existentes.
 
 | Campo | Quem Preenche? | Observação |
 | :--- | :--- | :--- |
 | **Criação do Deal** | **USUÁRIO (Manual)** | O robô não cria mais deals. |
-| **Nome do Deal** | **Script 3** | Atualiza para o padrão `Nome #ID`. |
-| **Valor (Amount)** | **Script 3** | Atualiza com o somatório dos itens. |
-| **Itens (Produtos)** | **Script 3** | Cria os itens nativos do HubSpot. |
+| **Nome do Deal** | **USUÁRIO (Manual)** | 🔒 **O robô NUNCA altera o nome.** Mantém o original. |
+| **Valor (Amount)** | **Script 3 e 5** | Atualiza dinamicamente com o somatório dos itens. |
+| **Itens (Produtos)** | **Script 3 e 5** | Cria/Sincroniza os produtos dentro do negócio. |
+| **Frete** | **Script 3 e 5** | Atualiza o campo personalizado de frete. |
 | **Pipeline/Fase** | **USUÁRIO** | O robô não move o card de etapa. |
 
 ### Notas (Notes)
